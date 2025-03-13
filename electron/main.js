@@ -1,11 +1,9 @@
-import { app, BrowserWindow, ipcMain, dialog } from 'electron';
-import path from 'path';
-import { fileURLToPath } from 'url';
-import fs from 'fs';
-import isDev from 'electron-is-dev';
+const { app, BrowserWindow, ipcMain, dialog } = require('electron');
+const path = require('path');
+const fs = require('fs');
+const isDev = require('electron-is-dev');
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+// __dirname is already available in CommonJS
 
 let mainWindow;
 
@@ -14,21 +12,35 @@ function createWindow() {
     width: 1200,
     height: 800,
     webPreferences: {
-      nodeIntegration: true,
-      contextIsolation: false,
+      nodeIntegration: false,
+      contextIsolation: true,
       preload: path.join(__dirname, 'preload.js')
     }
   });
 
   const startUrl = isDev 
-    ? 'http://localhost:5173' 
+    ? 'http://localhost:5178'  
     : `file://${path.join(__dirname, '../dist/index.html')}`;
     
-  mainWindow.loadURL(startUrl);
+  console.log('Loading URL:', startUrl);
+  console.log('Is Dev Mode:', isDev);
+  console.log('__dirname:', __dirname);
+  console.log('Dist path:', path.join(__dirname, '../dist/index.html'));
+  console.log('Dist path exists:', fs.existsSync(path.join(__dirname, '../dist/index.html')));
+
+  mainWindow.loadURL(startUrl).catch((err) => {
+    console.error('Error loading URL:', err);
+    // Fallback to a default error page or retry mechanism
+    mainWindow.loadFile(path.join(__dirname, 'error.html'));
+  });
 
   if (isDev) {
     mainWindow.webContents.openDevTools();
   }
+
+  mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
+    console.error('Failed to load page:', errorDescription);
+  });
 
   mainWindow.on('closed', () => {
     mainWindow = null;
@@ -96,9 +108,12 @@ ipcMain.handle('save-photo', async (event, { dataUrl, fileName, directory }) => 
 // Handle selecting directory
 ipcMain.handle('select-directory', async () => {
   try {
+    console.log('Select directory called');
     const { canceled, filePaths } = await dialog.showOpenDialog({
       properties: ['openDirectory']
     });
+    
+    console.log('Dialog result:', { canceled, filePaths });
     
     if (canceled) {
       return { success: false, message: 'Operation cancelled' };
